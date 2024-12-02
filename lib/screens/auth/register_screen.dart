@@ -1,6 +1,7 @@
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
-import 'package:my_app/acceuil/acceuil.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:my_app/screens/auth/login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,19 +12,17 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
-  bool _useEmail = true;
+  String completePhoneNumber = '';
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
+    _usernameController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -68,7 +67,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 20),
               const Text(
                 'Inscription',
                 style: TextStyle(
@@ -79,10 +78,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'Créez votre compte pour commencer',
+                'Créez votre compte',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 30),
+              FadeInUp(
+                duration: const Duration(milliseconds: 500),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: TextFormField(
+                    controller: _usernameController,
+                    decoration: InputDecoration(
+                      hintText: 'Nom d\'utilisateur',
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Veuillez entrer votre nom d\'utilisateur';
+                      }
+                      if (value.length < 3) {
+                        return 'Le nom d\'utilisateur doit contenir au moins 3 caractères';
+                      }
+                      return null;
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -93,125 +125,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: TextFormField(
-                    controller: _nameController,
+                  child: IntlPhoneField(
+                    controller: _phoneController,
                     decoration: InputDecoration(
-                      hintText: 'Nom complet',
-                      prefixIcon: const Icon(Icons.person_outline),
+                      hintText: 'Numéro de téléphone',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
                       fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      counterText: '',
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Veuillez entrer votre nom';
+                    initialCountryCode: 'GN',
+                    dropdownIconPosition: IconPosition.trailing,
+                    flagsButtonPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    dropdownTextStyle: const TextStyle(fontSize: 16),
+                    style: const TextStyle(fontSize: 16),
+                    invalidNumberMessage: 'Numéro invalide',
+                    dropdownDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      color: Colors.grey.shade100,
+                    ),
+                    onChanged: (phone) {
+                      completePhoneNumber = phone.completeNumber;
+                    },
+                    validator: (phone) {
+                      if (phone == null || phone.number.isEmpty) {
+                        return 'Veuillez entrer votre numéro de téléphone';
+                      }
+                      if (phone.number.length != 9) {
+                        return 'Le numéro doit contenir 9 chiffres';
                       }
                       return null;
                     },
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              FadeInUp(
-                duration: const Duration(milliseconds: 500),
-                delay: const Duration(milliseconds: 200),
-                child: Row(
-                  children: [
-                    Switch(
-                      value: _useEmail,
-                      onChanged: (value) {
-                        setState(() {
-                          _useEmail = value;
-                        });
-                      },
-                      activeColor: const Color(0xFF094FC6),
-                    ),
-                    Text(
-                      _useEmail ? 'Email' : 'Téléphone',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (_useEmail)
-                FadeInUp(
-                  duration: const Duration(milliseconds: 500),
-                  delay: const Duration(milliseconds: 300),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        hintText: 'Email',
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                      ),
-                      validator: (value) {
-                        if (_useEmail) {
-                          if (value == null || value.isEmpty) {
-                            return 'Veuillez entrer votre email';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Veuillez entrer un email valide';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                )
-              else
-                FadeInUp(
-                  duration: const Duration(milliseconds: 500),
-                  delay: const Duration(milliseconds: 300),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        hintText: 'Numéro de téléphone',
-                        prefixIcon: const Icon(Icons.phone_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                      ),
-                      validator: (value) {
-                        if (!_useEmail) {
-                          if (value == null || value.isEmpty) {
-                            return 'Veuillez entrer votre numéro de téléphone';
-                          }
-                          if (value.length < 10) {
-                            return 'Numéro de téléphone invalide';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ),
               const SizedBox(height: 20),
               FadeInUp(
                 duration: const Duration(milliseconds: 500),
@@ -313,11 +264,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
-                      // TODO: Implémenter la logique d'inscription
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => const Accueil()),
-                      );
+                      final userData = {
+                        'username': _usernameController.text,
+                        'phone': completePhoneNumber,
+                        'password': _passwordController.text,
+                      };
+                      // TODO: Implémenter la logique d'inscription avec Firebase
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -336,6 +288,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       color: Colors.white,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              FadeInUp(
+                duration: const Duration(milliseconds: 500),
+                delay: const Duration(milliseconds: 800),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Déjà un compte ?',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        'Se connecter',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

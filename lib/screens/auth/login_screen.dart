@@ -1,5 +1,6 @@
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:my_app/acceuil/acceuil.dart';
 import 'package:my_app/screens/auth/register_screen.dart';
 
@@ -12,13 +13,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  String completePhoneNumber = '';
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -88,25 +90,38 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
+                  child: IntlPhoneField(
+                    controller: _phoneController,
                     decoration: InputDecoration(
-                      hintText: 'Email',
-                      prefixIcon: const Icon(Icons.email_outlined),
+                      hintText: 'Numéro de téléphone',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
                       fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      counterText: '',
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Veuillez entrer votre email';
+                    initialCountryCode: 'GN',
+                    dropdownIconPosition: IconPosition.trailing,
+                    flagsButtonPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    dropdownTextStyle: const TextStyle(fontSize: 16),
+                    style: const TextStyle(fontSize: 16),
+                    invalidNumberMessage: 'Numéro invalide',
+                    dropdownDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      color: Colors.grey.shade100,
+                    ),
+                    onChanged: (phone) {
+                      completePhoneNumber = phone.completeNumber;
+                    },
+                    validator: (phone) {
+                      if (phone == null || phone.number.isEmpty) {
+                        return 'Veuillez entrer votre numéro de téléphone';
                       }
-                      if (!value.contains('@')) {
-                        return 'Veuillez entrer un email valide';
+                      if (phone.number.length != 9) {
+                        return 'Le numéro doit contenir 9 chiffres';
                       }
                       return null;
                     },

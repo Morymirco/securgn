@@ -9,45 +9,62 @@ class FirebaseAuthService {
   // Stream pour suivre l'état de l'authentification
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Connexion avec email et mot de passe
-  Future<UserCredential?> signInWithEmailAndPassword(
-      String email, String password) async {
+  // Connexion avec numéro de téléphone
+  Future<void> signInWithPhone(
+    String phoneNumber,
+    Function(PhoneAuthCredential) verificationCompleted,
+    Function(FirebaseAuthException) verificationFailed,
+    Function(String, int?) codeSent,
+    Function(String) codeAutoRetrievalTimeout,
+  ) async {
     try {
-      return await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+      await _auth.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        verificationCompleted: verificationCompleted,
+        verificationFailed: verificationFailed,
+        codeSent: codeSent,
+        codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+        timeout: const Duration(seconds: 60),
       );
     } catch (e) {
-      print('Erreur de connexion: $e');
+      print('Erreur lors de l\'envoi du code: $e');
       rethrow;
     }
   }
 
-  // Inscription avec email et mot de passe
-  Future<UserCredential?> createUserWithEmailAndPassword(
-      String email, String password) async {
+  // Vérifier le code OTP
+  Future<UserCredential> verifyOTP(String verificationId, String smsCode) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+      return await _auth.signInWithCredential(credential);
+    } catch (e) {
+      print('Erreur de vérification OTP: $e');
+      rethrow;
+    }
+  }
+
+  // Mettre à jour le profil utilisateur
+  Future<void> updateUserProfile({String? displayName, String? photoURL}) async {
+    try {
+      await _auth.currentUser?.updateProfile(
+        displayName: displayName,
+        photoURL: photoURL,
       );
     } catch (e) {
-      print('Erreur d\'inscription: $e');
+      print('Erreur de mise à jour du profil: $e');
       rethrow;
     }
   }
 
   // Déconnexion
   Future<void> signOut() async {
-    await _auth.signOut();
-  }
-
-  // Réinitialisation du mot de passe
-  Future<void> resetPassword(String email) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email);
+      await _auth.signOut();
     } catch (e) {
-      print('Erreur de réinitialisation du mot de passe: $e');
+      print('Erreur de déconnexion: $e');
       rethrow;
     }
   }

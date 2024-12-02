@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "635550796448",
+    "project_id": "securgn",
+    "storage_bucket": "securgn.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:635550796448:android:c31478bcb831e9931d57c5",
+        "android_client_info": {
+          "package_name": "com.securguinee.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCc3l8wwwG_YWuSs6-fykb2c_5obfxiOkk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
