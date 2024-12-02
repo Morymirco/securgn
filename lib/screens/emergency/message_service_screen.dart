@@ -1,8 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:geolocator/geolocator.dart';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:my_app/services_firebase/firebase_auth_service.dart';
 
 class MessageServiceScreen extends StatefulWidget {
   final Map<String, String> service;
@@ -21,11 +24,13 @@ class MessageServiceScreen extends StatefulWidget {
 }
 
 class _MessageServiceScreenState extends State<MessageServiceScreen> {
-  final TextEditingController _messageController = TextEditingController();
+  final _messageController = TextEditingController();
+  final _authService = FirebaseAuthService();
+  final _firestore = FirebaseFirestore.instance;
   XFile? selectedImage;
   String? currentAddress;
   Position? currentPosition;
-  bool isLoading = false;
+  bool _isLoading = false;
 
   // Ajout de la liste des messages prédéfinis
   final List<String> predefinedMessages = [
@@ -89,7 +94,7 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
 
   Future<void> _getCurrentPosition() async {
     setState(() {
-      isLoading = true;
+      _isLoading = true;
     });
 
     try {
@@ -113,7 +118,7 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
       debugPrint(e.toString());
     } finally {
       setState(() {
-        isLoading = false;
+        _isLoading = false;
       });
     }
   }
@@ -124,44 +129,98 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
     });
   }
 
-  void _sendMessage() {
-    // TODO: Implémenter l'envoi du message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Message envoyé')),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.done_all, color: Colors.white, size: 16),
-                  SizedBox(width: 4),
-                  Text(
-                    'Envoyé',
-                    style: TextStyle(color: Colors.white, fontSize: 12),
+  Future<void> _sendMessage() async {
+    if (_messageController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez entrer un message')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Créer le message
+      final message = {
+        'userId': _authService.currentUser?.uid,
+        'userName': _authService.currentUser?.email,
+        'serviceId': widget.service['id'],
+        'serviceName': widget.service['name'],
+        'message': _messageController.text,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'sent',
+      };
+
+      // Ajouter la localisation si disponible
+      if (currentPosition != null) {
+        message['location'] = {
+          'latitude': currentPosition!.latitude,
+          'longitude': currentPosition!.longitude,
+          'address': currentAddress,
+        };
+      }
+
+      // Envoyer le message
+      await _firestore
+          .collection('services_messages')
+          .add(message);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('Message envoyé')),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ],
-              ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.done_all, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Envoyé',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        margin: const EdgeInsets.all(15),
-      ),
-    );
-    Navigator.pop(context);
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(15),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'envoi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Color get _softServiceColor => widget.serviceColor.withOpacity(0.8);
@@ -436,7 +495,7 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
                         const SizedBox(width: 10),
                         _buildActionButton(
                           icon: Icons.location_on,
-                          label: isLoading ? 'Chargement...' : 'Position',
+                          label: _isLoading ? 'Chargement...' : 'Position',
                           onPressed: _getCurrentPosition,
                         ),
                       ],
@@ -462,30 +521,39 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
               ],
             ),
             child: ElevatedButton(
-              onPressed: _sendMessage,
+              onPressed: _isLoading ? null : _sendMessage,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _softServiceColor,
+                backgroundColor: widget.serviceColor.withOpacity(_isLoading ? 0.7 : 1),
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
                 elevation: 0,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.send, color: Colors.white),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Envoyer le message',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.send, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Envoyer le message',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
         ],

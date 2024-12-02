@@ -9,52 +9,40 @@ class FirebaseAuthService {
   // Stream pour suivre l'état de l'authentification
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Connexion avec numéro de téléphone
-  Future<void> signInWithPhone(
-    String phoneNumber,
-    Function(PhoneAuthCredential) verificationCompleted,
-    Function(FirebaseAuthException) verificationFailed,
-    Function(String, int?) codeSent,
-    Function(String) codeAutoRetrievalTimeout,
-  ) async {
+  // Inscription avec email et mot de passe
+  Future<UserCredential> registerWithEmailAndPassword(
+      String email, String password) async {
     try {
-      await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        verificationCompleted: verificationCompleted,
-        verificationFailed: verificationFailed,
-        codeSent: codeSent,
-        codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
-        timeout: const Duration(seconds: 60),
+      return await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
       );
     } catch (e) {
-      print('Erreur lors de l\'envoi du code: $e');
+      print('Erreur d\'inscription: $e');
       rethrow;
     }
   }
 
-  // Vérifier le code OTP
-  Future<UserCredential> verifyOTP(String verificationId, String smsCode) async {
+  // Connexion avec email et mot de passe
+  Future<UserCredential> signInWithEmailAndPassword(
+      String email, String password) async {
     try {
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: smsCode,
+      return await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
       );
-      return await _auth.signInWithCredential(credential);
     } catch (e) {
-      print('Erreur de vérification OTP: $e');
+      print('Erreur de connexion: $e');
       rethrow;
     }
   }
 
-  // Mettre à jour le profil utilisateur
-  Future<void> updateUserProfile({String? displayName, String? photoURL}) async {
+  // Réinitialisation du mot de passe
+  Future<void> resetPassword(String email) async {
     try {
-      await _auth.currentUser?.updateProfile(
-        displayName: displayName,
-        photoURL: photoURL,
-      );
+      await _auth.sendPasswordResetEmail(email: email);
     } catch (e) {
-      print('Erreur de mise à jour du profil: $e');
+      print('Erreur de réinitialisation du mot de passe: $e');
       rethrow;
     }
   }
@@ -66,6 +54,16 @@ class FirebaseAuthService {
     } catch (e) {
       print('Erreur de déconnexion: $e');
       rethrow;
+    }
+  }
+
+  // Vérifier si l'email existe déjà
+  Future<bool> emailExists(String email) async {
+    try {
+      final result = await _auth.fetchSignInMethodsForEmail(email);
+      return result.isNotEmpty;
+    } catch (e) {
+      return false;
     }
   }
 } 

@@ -1,7 +1,11 @@
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:my_app/screens/auth/login_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:my_app/services_firebase/firebase_auth_service.dart';
+import 'package:my_app/services_firebase/firestore_service.dart';
+import 'package:my_app/acceuil/acceuil.dart';
+import 'package:my_app/screens/auth/complete_profile_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -12,21 +16,89 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _authService = FirebaseAuthService();
+  final _firestoreService = FirestoreService();
   final _usernameController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
-  String completePhoneNumber = '';
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _usernameController.dispose();
-    _phoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _registerUser() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        final userCredential = await _authService.registerWithEmailAndPassword(
+          _emailController.text,
+          _passwordController.text,
+        );
+
+        if (userCredential.user != null) {
+          await _firestoreService.createDocument(
+            'users',
+            userCredential.user!.uid,
+            {
+              'username': _usernameController.text,
+              'email': _emailController.text,
+              'imageUrl': '',
+              'createdAt': DateTime.now(),
+              'profileCompleted': false,
+            },
+          );
+
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CompleteProfileScreen(
+                  userId: userCredential.user!.uid,
+                ),
+              ),
+              (route) => false,
+            );
+          }
+        }
+      } catch (e) {
+        String errorMessage = 'Erreur d\'inscription';
+        
+        if (e.toString().contains('email-already-in-use')) {
+          errorMessage = 'Cet email est déjà utilisé';
+        } else if (e.toString().contains('weak-password')) {
+          errorMessage = 'Le mot de passe est trop faible';
+        } else if (e.toString().contains('invalid-email')) {
+          errorMessage = 'Format d\'email invalide';
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    }
   }
 
   @override
@@ -125,10 +197,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: IntlPhoneField(
-                    controller: _phoneController,
+                  child: TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      hintText: 'Numéro de téléphone',
+                      hintText: 'Email',
+                      prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
                         borderSide: BorderSide.none,
@@ -136,27 +210,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       filled: true,
                       fillColor: Colors.grey.shade100,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      counterText: '',
                     ),
-                    initialCountryCode: 'GN',
-                    dropdownIconPosition: IconPosition.trailing,
-                    flagsButtonPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    dropdownTextStyle: const TextStyle(fontSize: 16),
-                    style: const TextStyle(fontSize: 16),
-                    invalidNumberMessage: 'Numéro invalide',
-                    dropdownDecoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      color: Colors.grey.shade100,
-                    ),
-                    onChanged: (phone) {
-                      completePhoneNumber = phone.completeNumber;
-                    },
-                    validator: (phone) {
-                      if (phone == null || phone.number.isEmpty) {
-                        return 'Veuillez entrer votre numéro de téléphone';
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Veuillez entrer votre email';
                       }
-                      if (phone.number.length != 9) {
-                        return 'Le numéro doit contenir 9 chiffres';
+                      if (!value.contains('@') || !value.contains('.')) {
+                        return 'Veuillez entrer un email valide';
                       }
                       return null;
                     },
@@ -262,16 +322,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 duration: const Duration(milliseconds: 500),
                 delay: const Duration(milliseconds: 600),
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      final userData = {
-                        'username': _usernameController.text,
-                        'phone': completePhoneNumber,
-                        'password': _passwordController.text,
-                      };
-                      // TODO: Implémenter la logique d'inscription avec Firebase
-                    }
-                  },
+                  onPressed: _isLoading ? null : _registerUser,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF094FC6),
                     minimumSize: const Size(double.infinity, 55),
@@ -280,14 +331,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     elevation: 2,
                   ),
-                  child: const Text(
-                    'S\'inscrire',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'S\'inscrire',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),

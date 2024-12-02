@@ -1,6 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:my_app/screens/auth/login_screen.dart';
+import 'package:my_app/screens/profile/emergency_contacts_screen.dart';
+import 'package:my_app/screens/profile/personal_info_screen.dart';
+import 'package:my_app/screens/profile/security_screen.dart';
+import 'package:my_app/screens/profile/sent_messages_screen.dart';
+import 'package:my_app/services_firebase/firebase_auth_service.dart';
+import 'package:my_app/services_firebase/firestore_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -10,15 +18,128 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final String userName = "Mory koulibaly";
-  final String phoneNumber = "+224 625 21 21 15";
+  final _authService = FirebaseAuthService();
+  final _firestoreService = FirestoreService();
+  String userName = '';
+  String userEmail = '';
+  Map<String, dynamic>? _userData;
+
+  // Liste des couleurs de l'application
+  final List<Color> _brandColors = [
+    const Color(0xFF094FC6),  // Couleur principale
+    const Color(0xFF1E88E5),
+    const Color(0xFF2196F3),
+    const Color(0xFF42A5F5),
+    const Color(0xFF64B5F6),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      if (_authService.currentUser != null) {
+        final doc = await _firestoreService.getDocument(
+          'users',
+          _authService.currentUser!.uid,
+        );
+        
+        if (mounted) {
+          final data = doc.data() as Map<String, dynamic>?;
+          
+          if (data != null) {
+            setState(() {
+              _userData = data;
+              userName = data['username'] ?? 'Utilisateur';
+              userEmail = _authService.currentUser?.email ?? '';
+              
+              // Vérification et log des données pour le débogage
+              print('Données utilisateur chargées:');
+              print('Username: ${data['username']}');
+              print('Phone: ${data['phone']}');
+              print('Address: ${data['address']}');
+              print('Emergency Contact: ${data['emergencyContact']}');
+              print('Blood Type: ${data['bloodType']}');
+            });
+          } else {
+            print('Aucune donnée trouvée pour l\'utilisateur');
+          }
+        }
+      }
+    } catch (e) {
+      print('Erreur lors du chargement des données: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erreur lors du chargement des informations'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Fonction pour obtenir les initiales
+  String _getInitials(String username) {
+    if (username.isEmpty) return '';
+    
+    final names = username.trim().split(' ');
+    if (names.length >= 2) {
+      return '${names[0][0]}${names[1][0]}'.toUpperCase();
+    }
+    return username.substring(0, math.min(2, username.length)).toUpperCase();
+  }
+
+  // Fonction pour obtenir une couleur aléatoire
+  Color _getRandomColor() {
+    return _brandColors[math.Random().nextInt(_brandColors.length)];
+  }
+
+  // Widget pour l'avatar avec initiales
+  Widget _buildInitialsAvatar() {
+    final initials = _getInitials(userName);
+    final backgroundColor = _getRandomColor();
+
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white,
+          width: 3,
+        ),
+      ),
+      child: CircleAvatar(
+        radius: 45,
+        backgroundColor: backgroundColor,
+        child: Text(
+          initials,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPersonalInfo() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PersonalInfoScreen(userData: _userData ?? {}),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // AppBar personnalisée avec effet de parallaxe
           SliverAppBar(
             expandedHeight: 200.0,
             floating: false,
@@ -42,24 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 40),
                     Stack(
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 3,
-                            ),
-                          ),
-                          child: const CircleAvatar(
-                            radius: 45,
-                            backgroundColor: Colors.white,
-                            child: Icon(
-                              Icons.person,
-                              size: 45,
-                              color: Color(0xFF094FC6),
-                            ),
-                          ),
-                        ),
+                        _buildInitialsAvatar(), // Utilisation du nouveau widget
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -88,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     Text(
-                      phoneNumber,
+                      userEmail,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
                         fontSize: 16,
@@ -155,7 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.person_outline,
                       title: 'Informations personnelles',
                       subtitle: 'Modifier vos informations',
-                      onTap: () {},
+                      onTap: _showPersonalInfo,
                     ),
                   ),
                   FadeInUp(
@@ -175,7 +279,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.security,
                       title: 'Sécurité',
                       subtitle: 'Paramètres de sécurité',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SecurityScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   FadeInUp(
@@ -185,7 +296,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.contact_phone_outlined,
                       title: 'Contacts d\'urgence',
                       subtitle: 'Gérer vos contacts',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EmergencyContactsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 500),
+                    delay: const Duration(milliseconds: 450),
+                    child: _buildProfileOption(
+                      icon: Icons.message_outlined,
+                      title: 'Messages envoyés',
+                      subtitle: 'Historique de vos messages',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SentMessagesScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 25),
@@ -321,7 +456,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           size: 18,
           color: Colors.grey,
         ),
-        onTap: onTap,
+        onTap: title == 'Informations personnelles' ? _showPersonalInfo : onTap,
       ),
     );
   }

@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:animate_do/animate_do.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:my_app/services_firebase/firebase_auth_service.dart';
 
 class Contact extends StatefulWidget {
   const Contact({super.key});
@@ -13,9 +15,11 @@ class Contact extends StatefulWidget {
 
 class _ContactState extends State<Contact> {
   final TextEditingController _controller = TextEditingController();
-  final List<String> _messages = [];
-  File? _image;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuthService _authService = FirebaseAuthService();
   final ImagePicker _picker = ImagePicker();
+  File? _image;
+  bool _isLoading = false;
 
   Future<void> _openCamera() async {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
@@ -23,6 +27,7 @@ class _ContactState extends State<Contact> {
       setState(() {
         _image = File(photo.path);
       });
+      await _sendMessage(imageFile: File(photo.path));
     }
   }
 
@@ -31,23 +36,54 @@ class _ContactState extends State<Contact> {
     if (image != null) {
       setState(() {
         _image = File(image.path);
-        _messages.add("Image envoyée");
       });
+      await _sendMessage(imageFile: File(image.path));
     }
   }
 
-  Future<void> _pickDocument() async {
-    setState(() {
-      _messages.add("Document envoyé");
-    });
-  }
+  Future<void> _sendMessage({File? imageFile}) async {
+    if (_controller.text.isEmpty && imageFile == null) return;
 
-  void _sendMessage() {
-    if (_controller.text.isNotEmpty) {
-      setState(() {
-        _messages.add(_controller.text);
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final message = {
+        'userId': _authService.currentUser?.uid,
+        'userName': _authService.currentUser?.email,
+        'message': _controller.text,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': imageFile != null ? 'image' : 'text',
+        'status': 'sent',
+      };
+
+      // Si une image est jointe, ajouter son URL
+      if (imageFile != null) {
+        // TODO: Implémenter le stockage d'image
+        message['imageUrl'] = 'url_de_image';
+      }
+
+      await _firestore.collection('chat_urgence').add(message);
+
+      if (mounted) {
         _controller.clear();
-      });
+        setState(() {
+          _image = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de l\'envoi: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -103,36 +139,10 @@ class _ContactState extends State<Contact> {
                 _openCamera();
               },
             ),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF094FC6).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.file_present,
-                  color: Color(0xFF094FC6),
-                ),
-              ),
-              title: const Text('Document'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickDocument();
-              },
-            ),
           ],
         ),
       ),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(() {
-      setState(() {});  // Pour forcer la mise à jour de l'UI quand le texte change
-    });
   }
 
   @override
@@ -166,7 +176,7 @@ class _ContactState extends State<Contact> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Support',
+                  'Urgence',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -174,7 +184,7 @@ class _ContactState extends State<Contact> {
                   ),
                 ),
                 Text(
-                  'En ligne',
+                  'Service disponible 24/7',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.white70,
@@ -184,16 +194,6 @@ class _ContactState extends State<Contact> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.call, color: Colors.white),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -202,48 +202,93 @@ class _ContactState extends State<Contact> {
         child: Column(
           children: [
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(15),
-                reverse: true,
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  return FadeInUp(
-                    duration: const Duration(milliseconds: 300),
-                    child: Align(
-                      alignment: index % 2 == 0
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 15,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: index % 2 == 0
-                              ? const Color(0xFF094FC6)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 5,
-                              offset: const Offset(0, 2),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('chat_urgence')
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Erreur: ${snapshot.error}'));
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(15),
+                    reverse: true,
+                    itemCount: snapshot.data!.docs.length,
+                    itemBuilder: (context, index) {
+                      final message = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                      final isCurrentUser = message['userId'] == _authService.currentUser?.uid;
+
+                      return FadeInUp(
+                        duration: const Duration(milliseconds: 300),
+                        child: Align(
+                          alignment: isCurrentUser
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 15,
+                              vertical: 10,
                             ),
-                          ],
-                        ),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        child: Text(
-                          _messages[index],
-                          style: TextStyle(
-                            color: index % 2 == 0 ? Colors.white : Colors.black87,
-                            fontSize: 16,
+                            decoration: BoxDecoration(
+                              color: isCurrentUser
+                                  ? const Color(0xFF094FC6)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 5,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.75,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (!isCurrentUser)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      message['userName'] ?? 'Anonyme',
+                                      style: TextStyle(
+                                        color: isCurrentUser ? Colors.white70 : Colors.grey,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                if (message['type'] == 'image' && message['imageUrl'] != null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.network(
+                                      message['imageUrl'],
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                if (message['message'] != null && message['message'].isNotEmpty)
+                                  Text(
+                                    message['message'],
+                                    style: TextStyle(
+                                      color: isCurrentUser ? Colors.white : Colors.black87,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   );
                 },
               ),
@@ -263,11 +308,6 @@ class _ContactState extends State<Contact> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.emoji_emotions_outlined),
-                      color: Colors.grey[600],
-                      onPressed: () {},
-                    ),
-                    IconButton(
                       icon: const Icon(Icons.attach_file),
                       color: Colors.grey[600],
                       onPressed: _showAttachmentOptions,
@@ -282,7 +322,7 @@ class _ContactState extends State<Contact> {
                         child: TextField(
                           controller: _controller,
                           decoration: const InputDecoration(
-                            hintText: 'Message...',
+                            hintText: 'Message d\'urgence...',
                             border: InputBorder.none,
                           ),
                         ),
@@ -314,22 +354,20 @@ class _ContactState extends State<Contact> {
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(24),
-                          onTap: () {
-                            if (_controller.text.isNotEmpty) {
-                              _sendMessage();
-                            } else {
-                              // TODO: Implémenter l'enregistrement vocal
-                            }
-                          },
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            child: Icon(
-                              _controller.text.isEmpty ? Icons.mic : Icons.send,
-                              key: ValueKey<bool>(_controller.text.isEmpty),
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
+                          onTap: _isLoading ? null : () => _sendMessage(),
+                          child: _isLoading
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.send,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                         ),
                       ),
                     ),
@@ -341,5 +379,11 @@ class _ContactState extends State<Contact> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }

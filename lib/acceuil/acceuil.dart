@@ -10,6 +10,7 @@ import 'package:my_app/screens/notifications_screen.dart';
 import 'package:my_app/screens/profile/profile_screen.dart';
 import 'package:my_app/screens/search_screen.dart';
 import 'package:my_app/screens/settings_screen.dart';
+import 'package:my_app/services/emergency_services_initializer.dart';
 
 class Accueil extends StatefulWidget {
   const Accueil({super.key});
@@ -20,6 +21,17 @@ class Accueil extends StatefulWidget {
 
 class _AccueilState extends State<Accueil> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkServices();
+  }
+
+  Future<void> _checkServices() async {
+    final servicesInitializer = EmergencyServicesInitializer();
+    await servicesInitializer.checkExistingServices();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -370,11 +382,13 @@ class _AccueilState extends State<Accueil> {
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ServiceListScreen(
-                              serviceType: 'Urgence Médicale',
-                              serviceColor: Colors.red,
-                              serviceIcon: Icons.local_hospital,
-                            )),
+                            MaterialPageRoute(
+                              builder: (context) => const ServiceListScreen(
+                                serviceType: 'Urgences Médicales',
+                                serviceColor: Colors.red,
+                                serviceIcon: Icons.local_hospital,
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -385,11 +399,13 @@ class _AccueilState extends State<Accueil> {
                         onTap: () {
                          Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ServiceListScreen (
-                              serviceType: 'Police',
-                              serviceColor: Colors.blue,
-                              serviceIcon: Icons.local_police,
-                            )),
+                            MaterialPageRoute(
+                              builder: (context) => ServiceListScreen(
+                                serviceType: 'Police',
+                                serviceColor: Colors.blue,
+                                serviceIcon: Icons.local_police,
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -400,11 +416,13 @@ class _AccueilState extends State<Accueil> {
                         onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const ServiceListScreen(
-                                serviceType: 'Pompiers',
-                                serviceColor: Colors.orange,
-                                serviceIcon: Icons.fire_truck,
-                              )),
+                              MaterialPageRoute(
+                                builder: (context) => ServiceListScreen(
+                                  serviceType: 'Pompiers',
+                                  serviceColor: Colors.orange,
+                                  serviceIcon: Icons.fire_truck,
+                                ),
+                              ),
                             );
                         },
                       ),
@@ -415,11 +433,13 @@ class _AccueilState extends State<Accueil> {
                         onTap: () {
                             Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ServiceListScreen(
-                              serviceType: 'Assistance Routière',
-                              serviceColor: Colors.green,
-                              serviceIcon: Icons.support_agent,
-                            )),
+                            MaterialPageRoute(
+                              builder: (context) => ServiceListScreen(
+                                serviceType: 'Assistance Routière',
+                                serviceColor: Colors.green,
+                                serviceIcon: Icons.support_agent,
+                              ),
+                            ),
                           );
                         },
                       ),
