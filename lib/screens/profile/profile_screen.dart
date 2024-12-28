@@ -4,6 +4,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:my_app/screens/auth/login_screen.dart';
 import 'package:my_app/screens/profile/emergency_contacts_screen.dart';
+import 'package:my_app/screens/profile/emergency_qr_screen.dart';
 import 'package:my_app/screens/profile/personal_info_screen.dart';
 import 'package:my_app/screens/profile/security_screen.dart';
 import 'package:my_app/screens/profile/sent_messages_screen.dart';
@@ -310,6 +311,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     duration: const Duration(milliseconds: 500),
                     delay: const Duration(milliseconds: 450),
                     child: _buildProfileOption(
+                      icon: Icons.qr_code,
+                      title: 'QR Code d\'urgence',
+                      subtitle: 'Vos informations médicales d\'urgence',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EmergencyQRScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 500),
+                    delay: const Duration(milliseconds: 450),
+                    child: _buildProfileOption(
                       icon: Icons.message_outlined,
                       title: 'Messages envoyés',
                       subtitle: 'Historique de vos messages',
@@ -317,7 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const SentMessagesScreen(),
+                            builder: (context) =>  SentMessagesScreen(),
                           ),
                         );
                       },

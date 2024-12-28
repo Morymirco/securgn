@@ -6,6 +6,7 @@ import 'package:my_app/contact/contact.dart';
 import 'package:my_app/numurgence/numurgence.dart';
 import 'package:my_app/screens/about/about_screen.dart';
 import 'package:my_app/screens/emergency/service_list_screen.dart';
+import 'package:my_app/screens/help/help_screen.dart';
 import 'package:my_app/screens/notifications_screen.dart';
 import 'package:my_app/screens/profile/profile_screen.dart';
 import 'package:my_app/screens/search_screen.dart';
@@ -192,7 +193,10 @@ class _AccueilState extends State<Accueil> {
                       title: 'Aide',
                       onTap: () {
                         // TODO: Navigation vers l'aide
-                        Navigator.pop(context);
+                       Navigator.push(
+  context,
+  MaterialPageRoute(builder: (context) =>  HelpScreen()),
+);
                       },
                     ),
                   ],

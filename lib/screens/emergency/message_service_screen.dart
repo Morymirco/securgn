@@ -2,13 +2,16 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:my_app/models/emergency_message.dart';
+import 'package:my_app/models/emergency_service.dart';
 import 'package:my_app/services_firebase/firebase_auth_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class MessageServiceScreen extends StatefulWidget {
-  final Map<String, String> service;
+  final EmergencyService service;
   final Color serviceColor;
   final IconData serviceIcon;
 
@@ -28,8 +31,8 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
   final _authService = FirebaseAuthService();
   final _firestore = FirebaseFirestore.instance;
   XFile? selectedImage;
-  String? currentAddress;
   Position? currentPosition;
+  String? currentAddress;
   bool _isLoading = false;
 
   // Ajout de la liste des messages prédéfinis
@@ -92,16 +95,88 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
     );
   }
 
+  Future<bool> _handleLocationPermission() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Vérifier si le service de localisation est activé
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Les services de localisation sont désactivés. Veuillez les activer dans les paramètres.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'PARAMÈTRES',
+              textColor: Colors.white,
+              onPressed: Geolocator.openLocationSettings,
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+
+    // Vérifier les permissions
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Les permissions de localisation sont refusées'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+    }
+
+    // Gérer le cas où les permissions sont définitivement refusées
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Les permissions de localisation sont définitivement refusées. '
+              'Veuillez les activer dans les paramètres.',
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'PARAMÈTRES',
+              textColor: Colors.white,
+              onPressed: () => openAppSettings(),
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+
+    return true;
+  }
+
   Future<void> _getCurrentPosition() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
+      // Vérifier les permissions avant d'obtenir la position
+      final hasPermission = await _handleLocationPermission();
+      if (!hasPermission) {
+        return;
+      }
+
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      List<Placemark> placemarks = await placemarkFromCoordinates(
+      List<geocoding.Placemark> placemarks = await geocoding.placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
@@ -109,13 +184,21 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
       setState(() {
         currentPosition = position;
         if (placemarks.isNotEmpty) {
-          Placemark place = placemarks[0];
+          geocoding.Placemark place = placemarks[0];
           currentAddress =
               '${place.street}, ${place.subLocality}, ${place.locality}';
         }
       });
     } catch (e) {
       debugPrint(e.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'obtention de la position: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -130,11 +213,33 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) {
+    if (_messageController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez entrer un message')),
+        const SnackBar(
+          content: Text('Veuillez saisir un message'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
+    }
+
+    // Vérifier si la localisation est disponible
+    if (currentPosition == null) {
+      // Demander la localisation si elle n'est pas disponible
+      await _getCurrentPosition();
+      
+      // Vérifier à nouveau après la tentative d'obtention
+      if (currentPosition == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('La localisation est obligatoire pour envoyer un message d\'urgence'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
     }
 
     setState(() {
@@ -142,68 +247,47 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
     });
 
     try {
-      // Créer le message
-      final message = {
-        'userId': _authService.currentUser?.uid,
-        'userName': _authService.currentUser?.email,
-        'serviceId': widget.service['id'],
-        'serviceName': widget.service['name'],
-        'message': _messageController.text,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'sent',
-      };
+      final currentUser = _authService.currentUser;
+      
+      // Créer le message avec localisation obligatoire
+      final message = EmergencyMessage(
+        id: '',  // Sera généré par Firestore
+        userId: currentUser?.uid ?? 'anonymous',
+        userName: currentUser?.email ?? 'Anonyme',
+        message: _messageController.text,
+        timestamp: DateTime.now(),
+        status: 'sent',
+        serviceId: widget.service.serviceId,
+        serviceName: widget.service.name,
+        location: Location(  // Location est maintenant obligatoire
+          latitude: currentPosition!.latitude,
+          longitude: currentPosition!.longitude,
+          address: currentAddress,
+        ),
+      );
 
-      // Ajouter la localisation si disponible
-      if (currentPosition != null) {
-        message['location'] = {
-          'latitude': currentPosition!.latitude,
-          'longitude': currentPosition!.longitude,
-          'address': currentAddress,
-        };
-      }
-
-      // Envoyer le message
-      await _firestore
+      // Créer le message dans la collection services_messages
+      final messageRef = await _firestore
           .collection('services_messages')
-          .add(message);
+          .add(message.toMap());
+
+      // Créer une référence dans la collection du service
+      await _firestore
+          .collection('emergency_services')
+          .doc(widget.service.serviceId)
+          .collection('messages')
+          .doc(messageRef.id)  // Utiliser le même ID que le message principal
+          .set(message.toMap());
 
       if (mounted) {
+        _messageController.clear();
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 10),
-                const Expanded(child: Text('Message envoyé')),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.done_all, color: Colors.white, size: 16),
-                      SizedBox(width: 4),
-                      Text(
-                        'Envoyé',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          const SnackBar(
+            content: Text('Message d\'urgence envoyé avec succès'),
             backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            margin: const EdgeInsets.all(15),
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -227,6 +311,35 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
   Color get _ultraSoftServiceColor => widget.serviceColor.withOpacity(0.1);
   Color get _mediumSoftServiceColor => widget.serviceColor.withOpacity(0.15);
 
+  void _showLocationExplanationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Localisation requise'),
+          content: const Text(
+            'Pour votre sécurité et permettre aux services d\'urgence de vous '
+            'localiser rapidement, nous avons besoin d\'accéder à votre position. '
+            'Ces informations ne seront utilisées que dans le cadre de votre demande d\'assistance.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ANNULER'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _getCurrentPosition();
+              },
+              child: const Text('AUTORISER'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -235,7 +348,7 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
         backgroundColor: _softServiceColor,
         elevation: 0,
         title: Text(
-          'Message à ${widget.service['name']}',
+          widget.service.name,
           style: const TextStyle(color: Colors.white),
         ),
         leading: IconButton(
@@ -278,7 +391,7 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.service['name']!,
+                            widget.service.name,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -294,7 +407,7 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                widget.service['address']!,
+                                widget.service.address,
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.9),
                                   fontSize: 14,
@@ -554,6 +667,32 @@ class _MessageServiceScreenState extends State<MessageServiceScreen> {
                         ),
                       ],
                     ),
+            ),
+          ),
+
+          // Indicateur de localisation
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  currentPosition != null ? Icons.location_on : Icons.location_searching,
+                  color: currentPosition != null ? Colors.green : Colors.grey,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    currentPosition != null
+                        ? currentAddress ?? 'Position actuelle'
+                        : 'Obtention de la position...',
+                    style: TextStyle(
+                      color: currentPosition != null ? Colors.black87 : Colors.grey,
+                      fontSize: 14,
+                    ),
+                  ),
+                  ),
+              ],
             ),
           ),
         ],

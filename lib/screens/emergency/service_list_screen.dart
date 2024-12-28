@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:my_app/models/emergency_service.dart';
 import 'package:my_app/screens/emergency/message_service_screen.dart';
-import 'package:my_app/services/emergency_services_initializer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ServiceListScreen extends StatelessWidget {
@@ -35,9 +35,6 @@ class ServiceListScreen extends StatelessWidget {
             .where('type', isEqualTo: serviceType)
             .snapshots(),
         builder: (context, snapshot) {
-          print('Type recherché: $serviceType');
-          print('Nombre de documents: ${snapshot.data?.docs.length ?? 0}');
-          
           if (snapshot.hasError) {
             return Center(child: Text('Erreur: ${snapshot.error}'));
           }
@@ -69,8 +66,12 @@ class ServiceListScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
-              final service = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-              
+              final doc = snapshot.data!.docs[index];
+              final service = EmergencyService.fromMap(
+                doc.data() as Map<String, dynamic>,
+                doc.id,
+              );
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
@@ -86,47 +87,48 @@ class ServiceListScreen extends StatelessWidget {
                   ],
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
+                    Padding(
                       padding: const EdgeInsets.all(20),
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(15),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: serviceColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
                               serviceIcon,
                               color: serviceColor,
-                              size: 30,
+                              size: 24,
                             ),
                           ),
-                          const SizedBox(width: 15),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  service['name'],
+                                  service.name,
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 5),
+                                const SizedBox(height: 4),
                                 Row(
                                   children: [
                                     Icon(
                                       Icons.location_on,
-                                      color: Colors.grey[400],
                                       size: 16,
+                                      color: Colors.grey[600],
                                     ),
-                                    const SizedBox(width: 5),
+                                    const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
-                                        service['address'],
+                                        service.address,
                                         style: TextStyle(
                                           color: Colors.grey[600],
                                           fontSize: 14,
@@ -141,10 +143,39 @@ class ServiceListScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: const Divider(),
-                    ),
+                    if (service.services.isNotEmpty) ...[
+                      const Divider(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: service.services.map((s) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: serviceColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                s,
+                                style: TextStyle(
+                                  color: serviceColor,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                    const Divider(),
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Row(
@@ -152,12 +183,10 @@ class ServiceListScreen extends StatelessWidget {
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () {
-                                // Logique d'appel
-                                final phones = service['phone'] as List<dynamic>;
-                                if (phones.isNotEmpty) {
+                                if (service.phone.isNotEmpty) {
                                   final Uri launchUri = Uri(
                                     scheme: 'tel',
-                                    path: phones.first.toString(),
+                                    path: service.phone.first,
                                   );
                                   launchUrl(launchUri);
                                 }
@@ -194,10 +223,7 @@ class ServiceListScreen extends StatelessWidget {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => MessageServiceScreen(
-                                      service: {
-                                        'name': service['name'] as String,
-                                        'address': service['address'] as String,
-                                      },
+                                      service: service,
                                       serviceColor: serviceColor,
                                       serviceIcon: serviceIcon,
                                     ),

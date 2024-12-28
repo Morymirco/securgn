@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:my_app/models/emergency_service.dart';
 import 'package:my_app/screens/emergency/message_service_screen.dart';
 import 'package:my_app/services_firebase/firebase_auth_service.dart';
 import 'package:shimmer/shimmer.dart';
@@ -516,10 +517,10 @@ class _SearchScreenState extends State<SearchScreen> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (context) => MessageServiceScreen(
-                                            service: {
-                                              'name': service['name'] as String,
-                                              'address': service['address'] as String,
-                                            },
+                                            service: EmergencyService.fromMap(
+                                              service,
+                                              snapshot.data!.docs[index].id,
+                                            ),
                                             serviceColor: serviceColor,
                                             serviceIcon: serviceIcon,
                                           ),

@@ -1,6 +1,6 @@
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
-import 'package:my_app/actualites/article_detail_screen.dart';
+import 'package:my_app/actualites/detail_actualite_screen.dart';
 import 'package:my_app/widgets/bottom_bar.dart';
 
 class Actualites extends StatefulWidget {
@@ -11,6 +11,110 @@ class Actualites extends StatefulWidget {
 }
 
 class _ActualitesState extends State<Actualites> {
+  String _selectedCategory = 'Tous';
+  final List<String> _categories = [
+    'Tous',
+    'Urgences',
+    'Sécurité',
+    'Santé',
+    'Routes',
+  ];
+
+  // Liste des actualités (à remplacer par des données Firestore)
+  final List<Map<String, dynamic>> _actualites = [
+    {
+      'title': 'Nouveau centre médical d\'urgence',
+      'description': 'Un nouveau centre médical d\'urgence ouvre ses portes à Conakry...',
+      'image': 'assets/images/medical.jpg',
+      'date': '2 heures',
+      'category': 'Santé',
+    },
+    {
+      'title': 'Alerte météo : Fortes pluies',
+      'description': 'Des fortes pluies sont attendues dans la région de Conakry...',
+      'image': 'assets/images/meteo2.jpg',
+      'date': '5 heures',
+      'category': 'Urgences',
+    },
+    {
+      'title': 'Campagne de vaccination',
+      'description': 'Une nouvelle campagne de vaccination débute cette semaine...',
+      'image': 'assets/images/vaccinatio.jpg',
+      'date': '1 jour',
+      'category': 'Santé',
+    },
+    // Ajoutez d'autres actualités ici
+  ];
+
+  List<Map<String, dynamic>> get filteredActualites {
+    if (_selectedCategory == 'Tous') {
+      return _actualites;
+    }
+    return _actualites.where((actualite) => 
+      actualite['category'] == _selectedCategory
+    ).toList();
+  }
+
+  void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Filtrer par catégorie',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _categories.map((category) => FilterChip(
+                  label: Text(category),
+                  selected: _selectedCategory == category,
+                  onSelected: (selected) {
+                    setState(() {
+                      _selectedCategory = category;
+                    });
+                    this.setState(() {}); // Rafraîchir la liste principale
+                    Navigator.pop(context);
+                  },
+                  backgroundColor: Colors.grey.shade100,
+                  selectedColor: const Color(0xFF094FC6),
+                  checkmarkColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: _selectedCategory == category 
+                      ? Colors.white 
+                      : Colors.black87,
+                  ),
+                )).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showShareDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -211,9 +315,7 @@ class _ActualitesState extends State<Actualites> {
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list, color: Colors.white),
-            onPressed: () {
-              // TODO: Implémenter le filtre
-            },
+            onPressed: _showFilterDialog,
           ),
         ],
       ),
@@ -237,44 +339,29 @@ class _ActualitesState extends State<Actualites> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 child: Row(
-                  children: [
-                    _buildCategoryChip('Tous', true),
-                    _buildCategoryChip('Urgences', false),
-                    _buildCategoryChip('Sécurité', false),
-                    _buildCategoryChip('Santé', false),
-                    _buildCategoryChip('Routes', false),
-                  ],
+                  children: _categories.map((category) => 
+                    _buildCategoryChip(
+                      category, 
+                      category == _selectedCategory,
+                    ),
+                  ).toList(),
                 ),
               ),
             ),
 
-            // Liste des actualités
+            // Liste des actualités filtrées
             Padding(
               padding: const EdgeInsets.all(15),
               child: Column(
-                children: [
+                children: filteredActualites.map((actualite) => 
                   _buildNewsCard(
-                    title: 'Nouveau centre médical d\'urgence',
-                    description: 'Un nouveau centre médical d\'urgence ouvre ses portes à Conakry...',
-                    image: 'assets/images/img_numurgence.jpeg',
-                    date: '2 heures',
-                    category: 'Santé',
+                    title: actualite['title'],
+                    description: actualite['description'],
+                    image: actualite['image'],
+                    date: actualite['date'],
+                    category: actualite['category'],
                   ),
-                  _buildNewsCard(
-                    title: 'Alerte météo : Fortes pluies',
-                    description: 'Des fortes pluies sont attendues dans la région de Conakry...',
-                    image: 'assets/images/img_numurgence.jpeg',
-                    date: '5 heures',
-                    category: 'Urgences',
-                  ),
-                  _buildNewsCard(
-                    title: 'Campagne de vaccination',
-                    description: 'Une nouvelle campagne de vaccination débute cette semaine...',
-                    image: 'assets/images/img_numurgence.jpeg',
-                    date: '1 jour',
-                    category: 'Santé',
-                  ),
-                ],
+                ).toList(),
               ),
             ),
           ],
@@ -298,7 +385,9 @@ class _ActualitesState extends State<Actualites> {
           ),
           selected: isSelected,
           onSelected: (bool value) {
-            // TODO: Implémenter la sélection de catégorie
+            setState(() {
+              _selectedCategory = label;
+            });
           },
           backgroundColor: Colors.white,
           selectedColor: const Color(0xFF094FC6),
@@ -446,12 +535,14 @@ class _ActualitesState extends State<Actualites> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => ArticleDetailScreen(
-                                  title: title,
-                                  description: description,
-                                  image: image,
-                                  date: date,
-                                  category: category,
+                                builder: (context) => DetailActualiteScreen(
+                                  actualite: {
+                                    'title': title,
+                                    'description': description,
+                                    'image': image,
+                                    'date': date,
+                                    'category': category,
+                                  },
                                 ),
                               ),
                             );
